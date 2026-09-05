@@ -435,6 +435,12 @@ public class BrowsePresenter extends BasePresenter<BrowseView> implements Sectio
             return;
         }
 
+        // >>> STPLUS: karta "Ładowanie…" nie jest filmem — ignorujemy ją
+        if (StPlus.isLoadingItem(item)) {
+            return;
+        }
+        // <<< STPLUS
+
         // Check that channels new look enabled and we're on the first columnAdd commentMore actions
         if (belongsToChannelUploadsMultiGrid(item)) {
             if (getMainUIData().isUploadsAutoLoadEnabled()) {
@@ -452,6 +458,12 @@ public class BrowsePresenter extends BasePresenter<BrowseView> implements Sectio
         if (getContext() == null) {
             return;
         }
+
+        // >>> STPLUS: karta "Ładowanie…" nie jest filmem — ignorujemy ją
+        if (StPlus.isLoadingItem(item)) {
+            return;
+        }
+        // <<< STPLUS
 
         if (belongsToChannelUploads(item)) { // We need to be sure we exactly on Channels section
             ChannelUploadsMenuPresenter.instance(getContext()).showMenu(item, (videoItem, action) -> {

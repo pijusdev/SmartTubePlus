@@ -105,7 +105,8 @@ bez auth). Zamiast tego:
 | 12b | hook: **na starcie ładowania home** (zaraz po `firstGroup` ACTION_REPLACE) `StPlus.onHomeLoadStarted(...)` — wstawia wiersz z cache, zanim przyjdzie odpowiedź z sieci | `BrowsePresenter.java` (`updateVideoRows`, ~linia 726) |
 | 12c | hook w `onScrollEnd()`: `if (group != null && StPlus.onRowScrollEnd(group.getId())) return;` | `BrowsePresenter.java` (~linia 488) |
 | 12d | naprawa znikającej górnej belki przy wstawieniu wiersza na pozycję 0 | `smarttubetv/.../tv/ui/browse/video/MultipleRowsFragment.java` (`update()`) |
-| 13 | string tytułu rzędu `stplus_subscriptions_row` = "Twoje kanały" | `common/src/main/res/values/strings.xml` (po `suggestions`, ~linia 490) |
+| 12e | haki w `onVideoItemClicked` / `onVideoItemLongClicked`: ignorowanie karty "Ładowanie…" | `BrowsePresenter.java` |
+| 13 | stringi `stplus_subscriptions_row` = "Twoje kanały" i `stplus_loading_more` = "Ładowanie…" | `common/src/main/res/values/strings.xml` (po `suggestions`, ~linia 490) |
 
 ### Jak to działa technicznie (dla przyszłych napraw)
 
@@ -161,6 +162,13 @@ Gdy user jest niżej — nic nie jest przesuwane (nie wyrywamy go na górę).
 RSS pobiera **do 200** najnowszych materiałów z kanałów, ale wiersz pokazuje
 na start **40**. Gdy user dojedzie do końca wiersza, dosypywane jest kolejne
 **20** — z już pobranego zapasu, więc bez ruchu w sieci i natychmiast.
+
+Na końcu wiersza stoi sztuczna karta **„Ładowanie…"** (`videoId = stplus_loading`)
+— sygnał, że jest więcej. Po dosypaniu partii karta jest zdejmowana
+(`ACTION_REMOVE`) i doklejana na nowym końcu, dopóki zostało coś w zapasie.
+Kliknięcie/przytrzymanie tej karty jest ignorowane (haki w `onVideoItemClicked`
+i `onVideoItemLongClicked` → `StPlus.isLoadingItem()`), żeby nie próbowała
+odtworzyć nieistniejącego filmu.
 
 Hak: `BrowsePresenter.onScrollEnd()` — jeśli grupa ma nasze ID, woła
 `StPlus.onRowScrollEnd(groupId)` i **przerywa** normalne `continueGroup()`
@@ -234,7 +242,13 @@ Jeśli `git apply` zgłasza konflikty (upstream zmienił kontekst):
 2. Wklej haki ręcznie wg tabeli powyżej (każdy hak to ≤ 6 linijek).
 3. `StPlus.java` wklej 1:1 (plik nowościowy, nie powinien kolidować).
 4. Ikona `icon_collapse_menu.png` — wklej do `common/src/main/res/drawable-nodpi/`.
-5. Zaktualizuj patch: `git diff > STPLUS/patches/stplus-001-rebrand-feed.patch`.
+5. Zaktualizuj patch — **względem bazy upstreamu**, bo nasze zmiany są już
+   commitami w forku:
+   ```bat
+   git diff 25b7def51 -- ":!*.png" ":!.github/*" ":!STPLUS/patches/*" > STPLUS/patches/stplus-001-rebrand-feed.patch
+   ```
+   (`25b7def51` = commit v32.40, od którego odbiliśmy fork. Po aktualizacji
+   podstaw nowy commit bazowy.)
 
 ## Szybka kompilacja
 

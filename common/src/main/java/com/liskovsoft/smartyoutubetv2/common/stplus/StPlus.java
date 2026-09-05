@@ -58,6 +58,9 @@ public final class StPlus {
     private static final int MAX_ITEMS = 200;
     private static final int MAX_CHANNELS = 50;
 
+    /** videoId sztucznej karty "Ładowanie…" na końcu wiersza. */
+    private static final String LOADING_ITEM_ID = "stplus_loading";
+
     private static final String PREFS_NAME = "stplus";
     private static final String KEY_ROW_CACHE = "subs_row_cache";
     private static final String KEY_ROW_TIME = "subs_row_time";
@@ -188,6 +191,31 @@ public final class StPlus {
 
     // ---------------------------------------------------------------- row ---
 
+    /** Sztuczna karta na końcu wiersza: "Ładowanie…" — sygnał, że jest więcej. */
+    private static Video createLoadingItem(Context context) {
+        Video video = new Video();
+        video.videoId = LOADING_ITEM_ID;
+        video.title = context.getString(R.string.stplus_loading_more);
+        return video;
+    }
+
+    /** Czy to nasza karta-zaślepka (nie wolno jej otwierać ani kolejkować). */
+    public static boolean isLoadingItem(Video video) {
+        return video != null && LOADING_ITEM_ID.equals(video.videoId);
+    }
+
+    private static boolean hasMore() {
+        return sShownCount < sAllVideos.size();
+    }
+
+    private static VideoGroup buildGroup(Context context, BrowseSection section, List<Video> videos, int action) {
+        VideoGroup group = VideoGroup.from(videos, section, SUBS_ROW_POSITION);
+        group.setId(SUBS_ROW_ID);
+        group.setTitle(context.getString(R.string.stplus_subscriptions_row));
+        group.setAction(action);
+        return group;
+    }
+
     private static void showRow(Context context, BrowseView view, BrowseSection section, List<Video> videos) {
         if (videos.isEmpty()) {
             return;
@@ -197,19 +225,21 @@ public final class StPlus {
         sAllVideos.addAll(videos);
         sShownCount = Math.min(PAGE_SIZE, videos.size());
 
-        VideoGroup row = VideoGroup.from(new ArrayList<>(videos.subList(0, sShownCount)), section, SUBS_ROW_POSITION);
-        row.setId(SUBS_ROW_ID);
-        row.setTitle(context.getString(R.string.stplus_subscriptions_row));
+        List<Video> page = new ArrayList<>(videos.subList(0, sShownCount));
+        if (hasMore()) {
+            page.add(createLoadingItem(context)); // kafelek "Ładowanie…" na końcu
+        }
+
         // REPLACE: podmienia zawartość rzędu w miejscu (usuwa stary po ID,
         // wstawia nowy na pozycji 0) — bez duplikatów przy odświeżeniu.
-        row.setAction(VideoGroup.ACTION_REPLACE);
-        view.updateSection(row);
+        view.updateSection(buildGroup(context, section, page, VideoGroup.ACTION_REPLACE));
     }
 
     /**
      * Wywolywane, gdy user dojedzie do konca naszego wiersza (hook w
      * BrowsePresenter.onScrollEnd). Dosypuje kolejna partie z juz pobranego
-     * zapasu — bez ruchu w sieci, wiec natychmiast.
+     * zapasu — bez ruchu w sieci, wiec natychmiast. Kafelek "Ładowanie…"
+     * wedruje na koniec, dopoki jest jeszcze co dosypywac.
      *
      * @return true jesli to nasz wiersz (upstream nie ma juz nic do roboty)
      */
@@ -218,7 +248,7 @@ public final class StPlus {
             return false;
         }
 
-        if (sContext == null || sView == null || sSection == null || sShownCount >= sAllVideos.size()) {
+        if (sContext == null || sView == null || sSection == null || !hasMore()) {
             return true;
         }
 
@@ -226,11 +256,16 @@ public final class StPlus {
         List<Video> chunk = new ArrayList<>(sAllVideos.subList(sShownCount, end));
         sShownCount = end;
 
-        VideoGroup more = VideoGroup.from(chunk, sSection, SUBS_ROW_POSITION);
-        more.setId(SUBS_ROW_ID);
-        more.setTitle(sContext.getString(R.string.stplus_subscriptions_row));
-        more.setAction(VideoGroup.ACTION_APPEND);
-        sView.updateSection(more);
+        // 1. zdejmij stary kafelek "Ładowanie…"
+        List<Video> loading = new ArrayList<>();
+        loading.add(createLoadingItem(sContext));
+        sView.updateSection(buildGroup(sContext, sSection, loading, VideoGroup.ACTION_REMOVE));
+
+        // 2. dosyp partie (i kafelek na koncu, jesli zostalo jeszcze wiecej)
+        if (hasMore()) {
+            chunk.add(createLoadingItem(sContext));
+        }
+        sView.updateSection(buildGroup(sContext, sSection, chunk, VideoGroup.ACTION_APPEND));
 
         Log.d(TAG, "Row page appended: " + chunk.size() + " (shown " + sShownCount + "/" + sAllVideos.size() + ")");
         return true;

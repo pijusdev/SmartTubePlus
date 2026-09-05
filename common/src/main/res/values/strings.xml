@@ -489,6 +489,7 @@
     <string name="suggestions">Suggestions</string>
     <!-- >>> STPLUS -->
     <string name="stplus_subscriptions_row">Twoje kanały</string>
+    <string name="stplus_loading_more">Ładowanie…</string>
     <string name="stplus_collapse_menu">Zwiń menu</string> <!-- >>> STPLUS -->
     <!-- <<< STPLUS -->
     <string name="feedback">Feedback</string>
