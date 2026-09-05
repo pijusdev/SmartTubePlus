@@ -39,6 +39,7 @@ import com.liskovsoft.smartyoutubetv2.common.app.views.BrowseView;
 import com.liskovsoft.smartyoutubetv2.common.misc.AppDataSourceManager;
 import com.liskovsoft.smartyoutubetv2.common.misc.BrowseProcessorManager;
 import com.liskovsoft.smartyoutubetv2.common.misc.MediaServiceManager;
+import com.liskovsoft.smartyoutubetv2.common.stplus.StPlus; // >>> STPLUS
 import com.liskovsoft.smartyoutubetv2.common.misc.MediaServiceManager.AccountChangeListener;
 import com.liskovsoft.smartyoutubetv2.common.prefs.AccountsData;
 import com.liskovsoft.smartyoutubetv2.common.prefs.BlockedChannelData;
@@ -486,6 +487,12 @@ public class BrowsePresenter extends BasePresenter<BrowseView> implements Sectio
 
         VideoGroup group = item.getGroup();
 
+        // >>> STPLUS: nasz wiersz "Twoje kanały" dosypuje kolejne pozycje z zapasu
+        if (group != null && StPlus.onRowScrollEnd(group.getId())) {
+            return;
+        }
+        // <<< STPLUS
+
         continueGroup(group);
     }
 
@@ -722,6 +729,12 @@ public class BrowsePresenter extends BasePresenter<BrowseView> implements Sectio
         firstGroup.setAction(VideoGroup.ACTION_REPLACE);
         getView().updateSection(firstGroup);
 
+        // >>> STPLUS: wiersz "Twoje kanały" z cache OD RAZU (przed odpowiedzią z sieci)
+        if (isHomeSection()) {
+            StPlus.onHomeLoadStarted(getContext(), getView(), section);
+        }
+        // <<< STPLUS
+
         if (groups == null) {
             // No group. Maybe just clear.
             getView().showProgressBar(false);
@@ -752,6 +765,14 @@ public class BrowsePresenter extends BasePresenter<BrowseView> implements Sectio
 
                                 continueGroupIfNeeded(videoGroup, false);
                             }
+
+                            // >>> STPLUS: rząd subskrypcji — wywoływany PO pętli domyślnych
+                            // wierszy, żeby nasz wiersz (pozycja 0) nie był wypychany
+                            // przez wiersze dodawane w trakcie asynchronicznego RSS.
+                            if (isHomeSection()) {
+                                StPlus.onHomeRowsLoaded(getContext(), getView(), section);
+                            }
+                            // <<< STPLUS
                         },
                         error -> {
                             Log.e(TAG, "updateRowsHeader error: %s", error.getMessage());

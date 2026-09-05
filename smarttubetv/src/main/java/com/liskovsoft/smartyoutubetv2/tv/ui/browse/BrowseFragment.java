@@ -14,6 +14,7 @@ import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentTransaction;
 import androidx.leanback.app.BrowseSupportFragment;
 import androidx.leanback.app.HeadersSupportFragment;
+import com.liskovsoft.smartyoutubetv2.common.stplus.StPlus; // >>> STPLUS
 import androidx.leanback.widget.ArrayObjectAdapter;
 import androidx.leanback.widget.HeaderItem;
 import androidx.leanback.widget.ListRowPresenter;
@@ -108,6 +109,9 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
         prepareEntranceTransition();
 
         mBrowsePresenter.onViewInitialized();
+
+        setupStPlusNavCollapse(); // >>> STPLUS
+        setupStPlusToolbar(); // >>> STPLUS
 
         // Restore state after crash
         mCrashRestorer.restoreHeader((idx, video) -> {
@@ -348,6 +352,110 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
             getMainFragment().getView().requestFocus();
         }
     }
+
+    // >>> STPLUS: pasek narzedzi na belce (tablet) — zwijanie menu + wskaznik
+    // i przycisk odswiezania feedu "Twoje kanaly". Szczegoly: STPLUS/MODYFIKACJE.md
+    private android.widget.ImageView mStPlusMenuBtn;
+    private android.widget.ImageView mStPlusRefreshBtn;
+
+    /**
+     * Zwija/rozwija rail nawigacji NATYWNYM przejsciem leanbacka.
+     * NIE ruszamy widocznosci fragmentu ani sekcji w railu — poprzednia wersja
+     * (sekcja "Zwin menu" + setVisibility(GONE)) powodowala czarny ekran,
+     * bo najechanie na sekcje podmienia fragment tresci na pusty.
+     */
+    private void toggleNavigationCollapse() {
+        startHeadersTransitionSafe(!isShowingHeaders());
+        mHandler.postDelayed(this::updateStPlusMenuIcon, 300);
+    }
+
+    private void updateStPlusMenuIcon() {
+        if (mStPlusMenuBtn != null) {
+            mStPlusMenuBtn.setRotation(isShowingHeaders() ? 0f : 180f);
+        }
+    }
+
+    private android.widget.ImageView createStPlusButton(int iconRes, int size, int padding) {
+        android.widget.ImageView btn = new android.widget.ImageView(getContext());
+        btn.setImageResource(iconRes);
+        btn.setPadding(padding, padding, padding, padding);
+        btn.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER);
+        // bez tla, mocno polprzezroczysta — ma nie krzyczec z belki
+        btn.setAlpha(0.45f);
+        // tylko dotyk — nie wchodzi w nawigacje pilotem (d-pad bez zmian)
+        btn.setFocusable(false);
+        btn.setClickable(true);
+        return btn;
+    }
+
+    /** Dodaje 2 przyciski na belce: menu (lewy gorny rog) + odswiezanie (prawy). */
+    private void setupStPlusToolbar() {
+        View root = getView();
+        if (getContext() == null || mStPlusMenuBtn != null || !(root instanceof android.widget.FrameLayout)) {
+            return;
+        }
+
+        float d = getResources().getDisplayMetrics().density;
+        int size = (int) (56 * d);
+        int pad = (int) (8 * d);
+        int margin = (int) (6 * d);
+
+        // Przycisk menu — LEWY gorny rog belki (rozwin/zwin rail).
+        mStPlusMenuBtn = createStPlusButton(
+                com.liskovsoft.smartyoutubetv2.common.R.drawable.icon_collapse_menu, size, pad);
+        mStPlusMenuBtn.setOnClickListener(v -> toggleNavigationCollapse());
+
+        android.widget.FrameLayout.LayoutParams menuParams = new android.widget.FrameLayout.LayoutParams(size, size);
+        menuParams.gravity = android.view.Gravity.TOP | android.view.Gravity.START;
+        menuParams.topMargin = margin;
+        menuParams.leftMargin = margin;
+        ((android.widget.FrameLayout) root).addView(mStPlusMenuBtn, menuParams);
+
+        // Przycisk/wskaznik odswiezania feedu — PRAWY gorny rog belki.
+        mStPlusRefreshBtn = createStPlusButton(R.drawable.ic_refresh_white, size, pad);
+        mStPlusRefreshBtn.setOnClickListener(v -> StPlus.requestManualRefresh());
+
+        android.widget.FrameLayout.LayoutParams refreshParams = new android.widget.FrameLayout.LayoutParams(size, size);
+        refreshParams.gravity = android.view.Gravity.TOP | android.view.Gravity.END;
+        refreshParams.topMargin = margin;
+        refreshParams.rightMargin = margin;
+        ((android.widget.FrameLayout) root).addView(mStPlusRefreshBtn, refreshParams);
+
+        StPlus.setRefreshListener(refreshing -> mHandler.post(() -> showStPlusRefreshing(refreshing)));
+    }
+
+    /** Kreci ikonka podczas odswiezania feedu (widac, ze cos sie dzieje). */
+    private void showStPlusRefreshing(boolean refreshing) {
+        if (mStPlusRefreshBtn == null) {
+            return;
+        }
+
+        if (refreshing) {
+            android.view.animation.RotateAnimation anim = new android.view.animation.RotateAnimation(
+                    0f, 360f,
+                    android.view.animation.Animation.RELATIVE_TO_SELF, 0.5f,
+                    android.view.animation.Animation.RELATIVE_TO_SELF, 0.5f);
+            anim.setDuration(900);
+            anim.setRepeatCount(android.view.animation.Animation.INFINITE);
+            anim.setInterpolator(new android.view.animation.LinearInterpolator());
+            mStPlusRefreshBtn.startAnimation(anim);
+            mStPlusRefreshBtn.setAlpha(0.8f);
+        } else {
+            mStPlusRefreshBtn.clearAnimation();
+            mStPlusRefreshBtn.setAlpha(0.45f);
+        }
+    }
+
+    /** Rejestruje callback przywracajacy zwiniety rail (klawisz menu na pilocie). */
+    private void setupStPlusNavCollapse() {
+        StPlus.setReShowNavCallback(() -> {
+            if (!isShowingHeaders()) {
+                startHeadersTransitionSafe(true);
+                updateStPlusMenuIcon();
+            }
+        });
+    }
+    // <<< STPLUS
 
     /**
      * Usually called after header transition or fragment transaction

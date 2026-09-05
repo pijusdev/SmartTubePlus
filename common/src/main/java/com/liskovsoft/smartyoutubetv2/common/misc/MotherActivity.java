@@ -163,6 +163,12 @@ public class MotherActivity extends FragmentActivity {
             return true;
         }
 
+        // >>> STPLUS: klawisz menu przywraca zwinięty rail nawigacji (STPLUS/MODYFIKACJE.md)
+        if (KeyHelpers.isMenuKey(keyCode)) {
+            com.liskovsoft.smartyoutubetv2.common.stplus.StPlus.reShowNavIfHidden();
+        }
+        // <<< STPLUS
+
         boolean result = super.onKeyDown(keyCode, event);
 
         // Fix buggy G20s menu key (focus lost on key press)

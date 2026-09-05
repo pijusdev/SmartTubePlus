@@ -70,3 +70,17 @@ tmp/
 fabric.properties
 *BAK.java
 hs_err_pid*.log
+
+# >>> STPLUS: lokalne pliki agenta — NIE do publicznego repo (STPLUS/MODYFIKACJE.md, rozdzial o publikacji)
+.goal*.md
+wyslij-st.sh
+build-st.bat
+build-st-fast.bat
+build.bat
+build.ps1
+build*.log
+gradle.properties.bak
+README-SmartTube.md
+STPLUS/patches/gradle.properties.bak
+STPLUS/*.png
+# <<< STPLUS

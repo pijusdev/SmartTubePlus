@@ -164,7 +164,9 @@ android {
             targetSdkVersion project.properties.compileSdkVersion
         }
         ststable {
-            applicationId "org.smarttube.stable"
+            // >>> STPLUS: osobny identyfikator pakietu — Plus może być zainstalowany
+            // obok oryginalnego SmartTube (org.smarttube.stable). Patrz STPLUS/MODYFIKACJE.md
+            applicationId "org.smarttube.plus.stable"
             targetSdkVersion project.properties.compileSdkVersion
         }
         stfdroid {

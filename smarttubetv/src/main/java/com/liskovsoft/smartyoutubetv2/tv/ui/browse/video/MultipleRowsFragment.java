@@ -259,11 +259,26 @@ public abstract class MultipleRowsFragment extends RowsSupportFragment implement
 
             ListRow row = new ListRow(rowHeader, videoGroupAdapter);
 
+            // >>> STPLUS: wstawienie wiersza NA GORZE nie moze przesunac zaznaczenia.
+            // Leanback pokazuje gorna belke (logo + szukajka) tylko gdy zaznaczony
+            // jest pierwszy wiersz; wstawka na pozycji 0 przesuwala zaznaczenie
+            // na 1 i belka znikala. Szczegoly: STPLUS/MODYFIKACJE.md
+            int stPlusInsertPos = group.getPosition();
+            int stPlusPrevSelected = getSelectedPosition();
+            // <<< STPLUS
+
             if (group.getPosition() == -1 || group.getPosition() > mRowsAdapter.size()) {
                 mRowsAdapter.add(row);
             } else {
                 mRowsAdapter.add(group.getPosition(), row);
             }
+
+            // >>> STPLUS
+            if (stPlusInsertPos != -1 && stPlusInsertPos == stPlusPrevSelected
+                    && stPlusInsertPos < mRowsAdapter.size()) {
+                setSelectedPosition(stPlusInsertPos, false);
+            }
+            // <<< STPLUS
         } else {
             Log.d(TAG, "Continue row %s %s", group.getTitle(), System.currentTimeMillis());
 
