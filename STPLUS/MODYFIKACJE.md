@@ -283,10 +283,8 @@ sh wyslij-st.sh --bez-buildu # tylko wgraj to, co już zbudowane
 | build | `gradlew :smarttubetv:assembleStstableDebug --build-cache --parallel`, potem `gradlew --stop` (demon nie zostaje w tle) | `BUILD SUCCESSFUL` |
 | tablet | `adb install -r` (T580, armv7) | `dumpsys package org.smarttube.plus.stable` → versionName |
 | projektor | `adb install -r` (huanglong, armv7) | to samo |
-| hosting | `curl -F fileUpload` na `meble-comfort.pl/up` | pobranie + `aapt2 dump badging` |
+| hosting | `curl -F fileUpload` na prywatny hosting | pobranie + `aapt2 dump badging` |
 
-- Stały link: `https://meble-comfort.pl/up/uploads/SmartTubePlus.apk` (bez numeru
-  wersji — zawsze najnowsza, jak `MyTas-os.apk`).
 - APK: zawsze wariant **armeabi-v7a** — i tablet, i projektor są armv7.
 - Etapy są niezależne: jak jedno urządzenie nie wstaje (DHCP zmieniło IP),
   reszta leci dalej, a na końcu jest podsumowanie `NIE UDALO SIE`.
@@ -367,7 +365,7 @@ z zewnątrz, a haki są celowo krótkie i opisane.
 ## Historia wersji
 
 - **005** (2026-09-05): automat wydawania `wyslij-st.sh` (build → tablet →
-  projektor → stały link meble-comfort.pl/up, wzór z MyTasa) + publikacja forka
+  projektor → stały link na prywatnym hostingu, wzór z MyTasa) + publikacja forka
   na GitHubie (konto `pijusdev`).
 - **002** (2026-09-05): rząd "Twoje kanały" jako PIERWSZY wiersz (RSS, bez logowania,
   z lokalnej listy kanałów — grupa 1000 + custom) + przycisk "Zwiń menu" na dole raila.

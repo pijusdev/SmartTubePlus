@@ -51,9 +51,6 @@ ręcznie) — bez niej wiersza po prostu nie ma (celowo).
   (32-bit: tablety, Android TV boxy) ·
   [universal](https://github.com/pijusdev/SmartTubePlus/releases/download/v32.40-stplus/SmartTubePlus-v32.40-universal.apk)
   (wszystkie architektury)
-- **Stały link** (zawsze najnowsza):
-  <https://meble-comfort.pl/up/uploads/SmartTubePlus.apk>
-
 Instalacja jak zwykle: „instalowanie z nieznanych źródeł”.
 
 ## Dla deweloperów
