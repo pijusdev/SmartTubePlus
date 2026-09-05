@@ -1,3 +1,19 @@
+> ## This is the **SmartTube+** fork
+>
+> A small, plugin-style set of changes on top of SmartTube (base: v32.40):
+> - **"Your channels" row** on the home feed — latest videos from your *local*
+>   subscription list, works **without a YouTube account** (cache-first, paging,
+>   manual refresh).
+> - **Tablet toolbar** — touch-only buttons to collapse/expand the navigation
+>   rail and refresh the feed (remote/d-pad navigation unchanged).
+>
+> Everything is documented in [STPLUS/MODYFIKACJE.md](STPLUS/MODYFIKACJE.md)
+> with a reapplicable patch for future upstream versions
+> ([STPLUS/patches](STPLUS/patches)). The goal is for these features to be
+> considered upstream.
+>
+> ---
+
 [<img src="images/badge_fdroid.png" alt="Get it on F-Droid" height="80">](https://f-droid.org/packages/app.smarttube.fdroid/)
 [<img src="images/badge_github.png" alt="Get it on GitHub" height="80">](https://github.com/yuliskov/SmartTube/releases)
 

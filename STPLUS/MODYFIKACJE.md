@@ -301,6 +301,25 @@ sh wyslij-st.sh --bez-buildu # tylko wgraj to, co już zbudowane
 4. **`google-services.json`** z kluczem API dla naszego pakietu.
 5. Notatek roboczych (`.goal*.md`, logi buildów, `build_fast.log`).
 
+### Klucze i dostęp do konta GitHub (zasada Usera, 2026-09-05)
+
+- Do konta `pijusdev` ma dostęp **TYLKO `pi`**. Claude Code i inni agenci NIE
+  pushują na to konto i NIE mają dostępu do kluczy.
+- Token PAT leży **tylko** w pliku konta agenta Pi
+  (`C:/bun/pi-agent/workspace/agent-pi-konta/github/klucz github1.txt`).
+  Nigdy: w repo, w `.git/config` (remote z tokenem w URL), w dokumentacji
+  współdzielonej, w pamięci innych agentów.
+- Push robimy **jednorazowym URL-em z tokenem**
+  (`git push https://pijusdev:<token>@github.com/...`), żeby token nie został
+  zapisany w konfiguracji repozytorium (które inne agenty też otwierają).
+- Token wygasł 2026-09-05 (stary `ghp_MkL...`); nowy wygenerowany przez
+  przeglądarkę (logowanie Google → GitHub), **bez wygasania**, scope `repo` +
+  `public_repo`. Uwaga: push plików `.github/workflows/*` wymaga scope
+  `workflow` — dlatego workflow upstreama usunięto z forka.
+- `google-services.json`: dodany klient to **kopia** klienta `org.smarttube.stable`
+  z upstreama (ten sam projekt Firebase, ten sam publiczny klucz API) — nie ma
+  tam nowego sekretu.
+
 ### Ryzyka (ustalone z Userem 2026-09-05)
 
 - **Licencja: czysto.** SmartTube jest na **MIT** — wolno forkować, zmienić nazwę
