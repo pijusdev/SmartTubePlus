@@ -84,3 +84,6 @@ README-SmartTube.md
 STPLUS/patches/gradle.properties.bak
 STPLUS/*.png
 # <<< STPLUS
+keystore.properties
+STPLUS/research/newpipe/
+STPLUS/research/newpipe/

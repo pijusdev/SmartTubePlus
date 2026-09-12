@@ -90,7 +90,10 @@ public abstract class MultipleRowsFragment extends RowsSupportFragment implement
         }
 
         if (mRowsAdapter == null) {
-            mRowPresenter = new CustomListRowPresenter();
+            // >>> STPLUS: nasza podklasa dokleja zebatke na koncu naglowka "Twoje kanaly".
+            // Dla pozostalych wierszy zachowuje sie identycznie jak CustomListRowPresenter.
+            mRowPresenter = new com.liskovsoft.smartyoutubetv2.tv.presenter.StPlusRowPresenter();
+            // <<< STPLUS
             mRowPresenter.enableChildRoundedCorners(getMainUIData().isUiTweakEnabled(MainUIData.UI_TWEAK_ROUNDED_CORNERS));
 
             ClassPresenterSelector presenterSelector = new ClassPresenterSelector();

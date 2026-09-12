@@ -190,6 +190,263 @@ zrobił). `ACTION_APPEND` dokłada pozycje do istniejącego wiersza.
 User musi mieć LOKALNĄ listę kanałów (menu "Subskrypcje" → import z NewPipe / PocketTube /
 GrayJay, albo ręczne dodawanie). Bez lokalnych kanałów rząd się nie pojawia (to zamierzone).
 
+## SILNIK FEEDU v2 (2026-09-12) — przebudowa po pomiarach
+
+> Pełne uzasadnienie, dowody i pomiary: `STPLUS/AUDYT-CC.md` (punkty K13, K16, K17, K18).
+> Wzorzec, z którego korzystamy: `STPLUS/research/analiza_newpipe_feed.md` (NewPipe).
+
+**Dlaczego przebudowa (trzy potwierdzone pomiarem usterki v1):**
+
+1. **Sztorm odświeżeń niszczył zawartość.** Home ładował się wielokrotnie, każde ładowanie
+   startowało nowy fetch, a nowy fetch robił `dispose()` poprzedniego. Ostatni, ocalały
+   zwracał ogryzek (42 pozycje z 3 kanałów) i **bezwarunkowo nadpisywał** cache
+   (200 pozycji z 36 kanałów).
+2. **Limit `MAX_CHANNELS = 50`** brał pierwsze 50 ID z listy alfabetycznej — przy 178
+   subskrypcjach wiersz kończył się na literze „C".
+3. **YouTube dławi serię zapytań RSS** i odpowiada `404` (149 zapytań → 140 × 404).
+   To nie jest błąd ID ani naszego kodu — to tempo.
+
+**Nowe pliki (nasze):**
+
+- `common/src/main/java/com/liskovsoft/smartyoutubetv2/common/stplus/StPlusStore.java`
+  — magazyn PER KANAŁ: materiały + `lastTry`/`lastOk`. Plik tekstowy
+  `filesDir/stplus/feed.txt` (celowo czytelny, do diagnozy przez `run-as`).
+  Kluczowa zasada: **scalanie, nigdy nadpisanie całości** — kanał, który nie odpowiedział,
+  zachowuje poprzednie materiały. Sortowanie po dacie publikacji (dlatego data jest
+  zapisywana obok pozycji: `Video.toString()` jej nie niesie).
+- `MediaServiceCore/youtubeapi/src/main/java/com/liskovsoft/youtubeapi/rss/RssOptions.java`
+  — przełączniki dla `RssService` (ten jest `internal object`, więc nie da się go dotknąć
+  z modułu `common`): `skipChannelSync`, `maxParallelChannels`, `delayBetweenChannelsMs`.
+  Domyślne wartości = zachowanie upstreama.
+
+**Zmiany w upstreamie (hooki `>>> STPLUS`):**
+
+- `MediaServiceCore/.../rss/RssService.kt`:
+  - `fetchFeeds()` — porcje przez `chunked(limit)` zamiast „wszystko naraz";
+    **nie używać blokującego semafora** (korutyny `runBlocking` dzielą jeden wątek →
+    zakleszczenie, popełnione i naprawione 2026-09-12),
+  - odstęp między zapytaniami (`delayBetweenChannelsMs`) — lek na dławienie 404,
+  - `fetchFeed()` — `syncWithChannel()` (drugie, ciężkie `POST youtubei/v1/browse`
+    na każdy kanał) pomijane, gdy `RssOptions.skipChannelSync`.
+    **Uwaga:** to zapytanie wycinało też shorty — filtr shortów trzeba zrobić inaczej.
+
+**`StPlus.java` — jak działa teraz:**
+
+- wiersz rysuje się **zawsze z magazynu** (natychmiast, bez sieci), najnowsze pierwsze;
+- odświeżanie **rotacyjne**: runda bierze porcję najdawniej sprawdzanych kanałów,
+  kolejna następną, aż wszystkie są świeże;
+- rotacja w tle jest **cicha**: nie przerysowuje wiersza i nie kręci wskaźnikiem w belce
+  (przerysowanie = usunięcie i wstawienie rzędu w leanbacku → ekran skacze do góry).
+  Wiersz dostaje nową treść raz — na koniec obiegu albo przy następnym wejściu na home;
+- guard **czasowy** (`REFRESH_DEAD_MS`), nie boolowski — zawieszone odświeżanie samo wygasa
+  i nie blokuje feedu do końca życia procesu;
+- **tryb debugowy** (`DEBUG_LINE`): nagłówek wiersza pokazuje `6/173 · 90f · ↻12 · !8`
+  (kanały z danymi / wszystkie · filmy w magazynie · zostało w obiegu · bez odpowiedzi),
+  a pod każdym filmem czas publikacji („2 godz. temu");
+- przy pierwszym starcie po aktualizacji pokazywany jest stary cache v1 (tylko do odczytu),
+  żeby wiersz nie był pusty.
+
+**Stałe tempa (`StPlus.java`) — dobierane pod dławienie YouTube, nie pod „szybkość":**
+
+| stała | wartość | po co |
+|---|---|---|
+| `BATCH_CHANNELS` | 8 | ile kanałów w jednej rundzie |
+| `PARALLEL_CHANNELS` | 2 | ile naraz (NewPipe: 3) |
+| `CHANNEL_DELAY_MS` | 700 | odstęp między zapytaniami |
+| `NEXT_ROUND_DELAY_MS` | 6000 | przerwa między rundami |
+| `STALE_MS` | 60 min | kiedy kanał z danymi jest przeterminowany |
+| `EMPTY_RETRY_MS` | 5 min | szybszy powrót kanału, który nic nie zwrócił |
+| `MAX_ITEMS` | 200 | ile pozycji w wierszu |
+
+**Czego NIE robić przy kolejnych zmianach:**
+
+- nie nadpisywać magazynu wynikiem jednej rundy,
+- nie przerysowywać wiersza z pracy w tle,
+- nie zwiększać tempa bez pomiaru kodów odpowiedzi (`404` = za szybko),
+- nie wprowadzać limitu liczby kanałów jako „optymalizacji" — to obcięcie funkcji.
+
+## ŹRÓDŁA FEEDU v3 (2026-09-12) — RSS **i** zakładki kanału, z przełącznikiem
+
+> Pełne ustalenie i dowody: `STPLUS/AUDYT-CC.md`, punkt **K22** (wraz ze sprostowaniem).
+
+**Dlaczego:** feed przestał się napełniać — `feeds/videos.xml` zwracał **404 na wszystkich
+173 kanałach**, także na tych, które godzinę wcześniej odpowiadały poprawnie. Przy okazji
+wyszło, że komentarz w naszym kodzie („NewPipe robi wyłącznie RSS") był **nieprawdą**:
+NewPipe domyślnie ciągnie zakładki kanału, a RSS ma jako opcjonalny „fast mode"
+(`FeedLoadManager.kt:66`, wartość domyślna `false`). Dlatego PipePipe odświeża 170 kanałów
+bez kary — on w ogóle nie dotyka RSS-a.
+
+**Decyzja Usera:** nie rezygnujemy z żadnej drogi — ma być **przełącznik**, a RSS zostaje
+pierwszy („RSS zawsze działał i będzie działać, chyba że nas zbanowali całkowicie").
+
+| # | Zmiana | Plik |
+|---|--------|------|
+| 30 | **NOWY PLIK (nasz)** — druga droga do materiałów kanału (`fromBrowse`), liczniki kodów odpowiedzi RSS, narastająca przerwa po serii błędów (`backoffMs`), meldunki dla UI | `MediaServiceCore/.../rss/StPlusFeedSource.kt` |
+| 31 | `feedSource` (AUTO/RSS/BROWSE) + pola meldunkowe (`lastSourceUsed`, `lastError`, `lastCodesSummary`, `browseFallbackCount`); sprostowanie komentarza o NewPipe | `MediaServiceCore/.../rss/RssOptions.java` |
+| 32 | **3 krótkie haki** w `fetchFeed()`: wybór źródła, odwrót przy pustym wyniku, odwrót przy wyjątku + zapis kodu HTTP | `MediaServiceCore/.../rss/RssService.kt` |
+| 33 | karta statusu na początku wiersza, przeliczanie daty względnej (`publishedMs`/`fromRelative`), meldunek z rundy, wolniejsze tempo | `common/.../stplus/StPlus.java` |
+| 34 | karta statusu nieklikalna (rozszerzenie istniejących haków o `isStatusItem`) | `common/.../app/presenters/BrowsePresenter.java` |
+
+### Jak działa wybór źródła
+
+`RssOptions.feedSource`:
+- **`SOURCE_AUTO`** (domyślne) — najpierw RSS (tani: małe XML, prawdziwa data publikacji),
+  a gdy zwróci błąd **albo pustą listę** → zakładki kanału (`youtubei/v1/browse`).
+  To jest dokładnie wzorzec NewPipe (`FeedLoadManager.kt:175-190`).
+- **`SOURCE_RSS`** — tylko RSS, bez odwrotu. Po to, żeby dało się **uczciwie zmierzyć**,
+  czy endpoint wrócił do życia.
+- **`SOURCE_BROWSE`** — tylko zakładki kanału.
+
+### Dwie pułapki ścieżki „browse" (obie obsłużone, nie usuwać)
+
+1. **Brak daty publikacji.** `BaseMediaItem.getPublishedDate()` to twarde `-1`
+   (`BaseMediaItem.kt:123`); czas jest tylko tekstem względnym w `getProductionDate()`
+   („2 days ago"). Bez przeliczenia wiersz sortowałby się losowo — stąd
+   `StPlus.fromRelative()` (rdzenie PL i EN).
+2. **Brak `channelId` w pozycjach.** Grid kanału go nie powtarza, a magazyn STPLUS
+   grupuje materiały właśnie po `channelId` — bez uzupełnienia **cała runda wyglądałaby
+   na pustą**. `StPlusFeedSource.fromBrowse()` dopisuje ID, bo wie, czyj to kanał.
+
+### Karta statusu zamiast linii debugowej w nagłówku
+
+Nagłówek wiersza to zwykły `String` w `VideoGroup` (brak spanów) i ma **dużą czcionkę** —
+pełne zdanie się nie mieściło na tablecie, a skrót `6/173 · 90f · ↻12 · !8` User odrzucił
+(„jakiś skrót jak dla hakerów", „nie widzę, co wyszło ze skanowania"). Dlatego:
+
+- nagłówek wrócił do czystego **„Twoje kanały"**,
+- stan jest na **karcie na początku wiersza**, gdzie druga linia kafelka ma **małą czcionkę**
+  i mieści całe zdanie:
+  `6 z 173 kanałów, 90 filmów` / `ostatnie skanowanie 14:07: 5 kanałów, 3 z materiałami,
+  45 filmów, 2 bez odpowiedzi • źródło: zakładki kanału • RSS: błąd 404 • odpowiedzi RSS: 404x5`
+- karta jest nieklikalna (hak `isStatusItem` obok istniejącego `isLoadingItem`),
+- sygnatura wiersza uwzględnia treść meldunku — inaczej karta o stałym `videoId`
+  nigdy by się nie odświeżyła.
+
+### Tempo (zmienione po ustaleniu, że 404 to nie kwestia tempa)
+
+| stała | było | jest | po co |
+|---|---|---|---|
+| `BATCH_CHANNELS` | 8 | **5** | mniejsza porcja = mniej ruchu z jednego adresu |
+| `CHANNEL_DELAY_MS` | 700 | **1500** | spokojniej; User zgłosił, że feed chodził „co 15 s na trzech urządzeniach" |
+| `NEXT_ROUND_DELAY_MS` | 6000 | **12000** | j.w. |
+
+Dodatkowo `StPlusFeedSource.backoffMs()` — po 3 nieudanych RSS-ach przerwa **rośnie**
+(do 10 s). Wcześniej tempo było stałe niezależnie od tego, ile razy z rzędu dostaliśmy 404.
+
+**UWAGA przy diagnozie:** tablet i projektor odświeżające równocześnie to **podwojony ruch
+z jednego publicznego adresu** — wtedy mierzy się własny sztorm, a nie zachowanie YouTube
+(błąd K23). Na czas pomiaru zostawiać **jedno** urządzenie.
+
+## PRAWA STRONA NAGŁÓWKA WIERSZA (2026-09-12, sesja #3) — opis + zębatka
+
+> Zgłoszenia Usera z rozdziału 5.8 handoffu `HANDOFF-SmartTubePlus-20260912.md`
+> (a) zębatka nieklikalna, (b) wiersz pojawia się za późno — plus nowe z tej sesji:
+> opis skanowania ma zejść z tytułu na prawą stronę i być wyblakły.
+
+### Co było źle
+
+1. **Zębatka była tylko obrazkiem.** Poprzednia wersja doklejała ją jako
+   `compound drawable` do `TextView` nagłówka i łapała dotyk przez
+   `setOnTouchListener` po współrzędnej X. Nagłówek wiersza w leanbacku **nie
+   dostaje zdarzeń dotyku**, więc kliknięcie nie działało ani palcem, ani (tym
+   bardziej) pilotem — compound drawable nie może dostać fokusu.
+2. **Opis stanu siedział w tytule wiersza** (`rowTitle()` doklejał
+   „— 173 z 173 kanałów, 2560 filmów”), czyli tą samą dużą czcionką co tytuł,
+   tuż obok niego. User: „ten opis (...) powinien być raczej po prawej stronie
+   i bardziej wyblakły, mniej rzucający się w oczy (...) i mniej przeszkadzający”.
+3. **Wiersz „Twoje kanały” potrafił nie pojawić się po starcie.** `showRow()`
+   miało na wejściu `if (videos.isEmpty()) return;`, a magazyn (~1 MB) wczytywał
+   się z pliku dopiero przy pierwszym rysowaniu wiersza — więc dopóki się nie
+   wczytał, wiersza nie było wcale.
+
+### Ustalenie ze sprzętu (zrzut `uiautomator`, tablet SM-T580, gęstość 240)
+
+Belka nagłówka wiersza to `lb_row_container_header_dock` — **poziomy LinearLayout
+na całą szerokość ekranu**, zmierzone `[0,206][1200,260]`. Sam nagłówek siedzi w niej
+jako `wrap_content`: `[112,206][933,260]`. Czyli **po prawej jest wolne miejsce**
+i da się tam posadzić prawdziwe widoki. To jest podstawa całej tej zmiany.
+
+| # | Zmiana | Plik |
+|---|--------|------|
+| 40 | **Przepisany** — do belki nagłówka dokładamy drugie dziecko (`layout_weight = 1`, wyrównane do prawej): wyblakły `TextView` z opisem + `ImageView` z zębatką. Prawdziwy widok = własne pole dotyku, własny `OnClickListener`, `focusable` dla pilota | `smarttubetv/.../tv/presenter/StPlusRowPresenter.java` |
+| 41 | `rowTitle()` zwraca ZAWSZE czyste „Twoje kanały”; doszły `summaryText()` i `SummaryListener` (opis dla warstwy UI, wzorzec jak `RefreshListener`) | `common/.../stplus/StPlus.java` |
+| 42 | `showRow()` rysuje wiersz także przy PUSTEJ liście (karta stanu jako jedyna pozycja); `renderFromStore()` stawia wiersz od razu, nie czekając na wczytanie magazynu | `common/.../stplus/StPlus.java` |
+| 43 | **NOWE** `StPlus.preload(context)` — wczytanie magazynu w tle już przy starcie procesu | `common/.../stplus/StPlus.java` |
+| 44 | hak: `StPlus.preload(this)` w `onCreate()` | `smarttubetv/.../tv/ui/main/MainApplication.java` |
+| 45 | hak rozszerzony: kliknięcie karty stanu otwiera `StPlusSettings.show()` (droga do menu dla pilota) | `common/.../app/presenters/BrowsePresenter.java` |
+
+### Trzy pułapki, których nie wolno cofnąć
+
+1. **`onRequestFocusInDescendants()` → `false`** na naszym pasku. Bez tego zębatka
+   **zabiera fokus zaraz po starcie** aplikacji (sprawdzone: pierwszy build tej sesji
+   miał ją podświetloną od razu po wejściu na ekran główny). `requestFocus()` z góry —
+   tak okno wybiera pierwszy focusowalny widok — schodzi w dół właśnie tą metodą,
+   a nasza belka jest pierwszym dzieckiem wiersza. `focusSearch` z pilota idzie przez
+   `FocusFinder`/`addFocusables` i tego **nie dotyczy**, więc strzałką dalej się tam wchodzi.
+2. **Wysokość paska `WRAP_CONTENT`, nigdy `MATCH_PARENT`.** Belka nagłówka sama jest
+   `wrap_content`, więc dziecko z `MATCH_PARENT` dostałoby całą dostępną wysokość
+   i rozepchnęło nagłówek.
+3. **Zapas wokół ikony jest asymetryczny** (pion 4 dp, poziom 16 dp). Belka ma 36 dp
+   wysokości; kwadratowe pole dotyku 44 dp byłoby od niej wyższe i podniosło cały wiersz.
+   Pole dotyku rośnie więc w poziomie: zmierzone na tablecie `[1080,204][1184,260]`,
+   czyli ok. 69 × 37 dp.
+
+### Recykling widoków
+
+Leanback używa tych samych `ViewHolder`ów do różnych wierszy, więc przy **każdym**
+`onBindRowViewHolder` pasek jest jawnie włączany albo `GONE`. Bez tego zębatka
+wędruje do „Wybrane dla Ciebie”. Rozpoznanie naszego wiersza: ID grupy pierwszej
+pozycji (`StPlus.SUBS_ROW_ID`), tytuł tylko jako zapas.
+
+### Sprawdzone na sprzęcie (tablet, 2026-09-12 15:40–15:50)
+
+- klik palcem w zębatkę → otwiera się `AppDialogActivity` z menu SmartTube+,
+- pilot: DPAD_UP z pierwszego kafelka → fokus na zębatce; ENTER → menu; kolejny
+  DPAD_UP → górna belka (nie ma pułapki fokusu),
+- po starcie zębatka **nie** ma fokusu (fokus na pierwszym kafelku),
+- po przewinięciu w dół żaden inny nagłówek nie ma zębatki,
+- „Twoje kanały” jest w **pierwszym zrzucie, w którym strona główna ma jakiekolwiek
+  wiersze** — razem z „Wybrane dla Ciebie”, nie po czasie.
+
+## USTAWIENIA I DANE (2026-09-12, sesja #3, część druga)
+
+> Zgłoszenia Usera z tej sesji: shorty przechodzą mimo filtra, karta SmartTube+ znikała
+> razem z trybem debugowania, w opisie nie widać ile pobrano i kiedy, prędkości podane bez
+> podstawy („przy ilu kanałach?"), brak przełącznika języka, crash przy szybkim przewijaniu,
+> losowa kolejność po przełączeniu źródła.
+
+| # | Zmiana | Plik |
+|---|--------|------|
+| 50 | **NOWY PLIK (nasz)** — teksty PL/EN i przełącznik języka NASZYCH napisów (menu, karta stanu, nagłówek wiersza, czasy względne) | `common/.../stplus/StPlusText.java` |
+| 51 | Osobny przełącznik **karty stanu** (`KEY_STATUS_CARD`, domyślnie włączony) — do tej pory karta znikała razem z trybem debugowania | `common/.../stplus/StPlusSettings.java` |
+| 52 | Przełącznik **języka** (`KEY_LANG`: jak w systemie / polski / angielski) | `common/.../stplus/StPlusSettings.java` |
+| 53 | Opisy w menu: przy shortach i przy każdym źródle napisane wprost, gdzie filtr działa; przy każdej prędkości dopisane **„(przy ok. 200 kanałach)"** | `common/.../stplus/StPlusSettings.java` |
+| 54 | `onRowScrollEnd` — doładowanie wiersza przez `sMain.post` (naprawa crasha, K27) | `common/.../stplus/StPlus.java` |
+| 55 | `fromRelative` — jednostki od najdłuższej do najkrótszej, formy skrócone, log nierozpoznanego tekstu (K28) | `common/.../stplus/StPlus.java` |
+| 56 | `isShort` — dochodzi próg czasu trwania ≤ 60 s (K29) | `common/.../stplus/StPlus.java` |
+| 57 | `summaryText` — opis przy prawej krawędzi nagłówka mówi, co się dzieje: postęp obiegu albo ostatni/następny obieg i ile przyniósł | `common/.../stplus/StPlus.java` |
+| 58 | `merge` — pozycja bez daty zachowuje datę, którą już miała; licznik nowych pozycji (`lastNewItems`) | `common/.../stplus/StPlusStore.java` |
+
+### Trzy rzeczy, których nie wolno cofnąć
+
+1. **`merge` nie zastępuje znanej daty pustą.** To jest jedyna ochrona przed tym, co się
+   stało 2026-09-12: przełączenie źródła na „zakładki kanału" wyzerowało daty **całego**
+   magazynu (2572 pozycje, wszystkie `0`) i kolejność wiersza stała się losowa. Dowód i opis:
+   `AUDYT-CC.md`, K28.
+2. **W `fromRelative` dni są sprawdzane OSTATNIE.** Polskie „tygodnie" zawiera w sobie „dni",
+   a „tydzień" zawiera „dzie" — przy odwrotnej kolejności materiał sprzed dwóch tygodni
+   dostaje datę sprzed dwóch dni i wskakuje na górę.
+3. **`onRowScrollEnd` nie rusza adaptera synchronicznie.** Jest wołany ze środka przewijania;
+   każda zmiana listy w tym momencie to `IllegalStateException` i koniec aplikacji (K27).
+   Strażnik upstreama obejmuje tylko SYNC i REPLACE.
+
+### Język naszych tekstów
+
+`StPlusText` zamiast `res/values-en/` — bo zasoby idą za językiem systemu, a User chciał
+**przełącznik w naszym menu**, działający bez restartu aplikacji. Dodatkowo obie wersje
+tekstu leżą obok siebie w jednym pliku, co ma znaczenie przy publikacji na GitHubie.
+Tekst „About SmartTube+" zostaje **zawsze po angielsku** — jest pisany pod README.
+
 ## Funkcja 2: przyciski na górnej belce (tryb tabletowy)
 
 SmartTube jest robiony pod pilot/kursor na TV. Na tablecie brakuje sposobu, żeby

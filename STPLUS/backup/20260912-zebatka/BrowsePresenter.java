@@ -435,15 +435,8 @@ public class BrowsePresenter extends BasePresenter<BrowseView> implements Sectio
             return;
         }
 
-        // >>> STPLUS: karta "Ładowanie…" nie jest filmem — ignorujemy ją.
-        // Karta STANU otwiera nasze menu SmartTube+ — to jest droga do ustawien
-        // DLA PILOTA (zebatka w naglowku jest wygodna palcem, ale pilotem trzeba
-        // miec cos, na czym da sie stanac fokusem; karta to zwykly kafelek wiersza).
-        if (StPlus.isLoadingItem(item)) {
-            return;
-        }
-        if (StPlus.isStatusItem(item)) {
-            com.liskovsoft.smartyoutubetv2.common.stplus.StPlusSettings.show(getContext());
+        // >>> STPLUS: karta "Ładowanie…" nie jest filmem — ignorujemy ją
+        if (StPlus.isLoadingItem(item) || StPlus.isStatusItem(item)) {
             return;
         }
         // <<< STPLUS

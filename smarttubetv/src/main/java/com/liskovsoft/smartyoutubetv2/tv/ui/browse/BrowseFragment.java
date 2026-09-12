@@ -435,14 +435,20 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
                     0f, 360f,
                     android.view.animation.Animation.RELATIVE_TO_SELF, 0.5f,
                     android.view.animation.Animation.RELATIVE_TO_SELF, 0.5f);
-            anim.setDuration(900);
+            // Wolno i dyskretnie. User (2026-09-12): "kreci sie za szybko i jest za
+            // bardzo widoczna" — 900 ms na obrot przy pelnej jasnosci rzucalo sie w oczy
+            // bardziej niz tresc, po ktora tu przyszedl.
+            anim.setDuration(2600);
             anim.setRepeatCount(android.view.animation.Animation.INFINITE);
             anim.setInterpolator(new android.view.animation.LinearInterpolator());
             mStPlusRefreshBtn.startAnimation(anim);
-            mStPlusRefreshBtn.setAlpha(0.8f);
+            mStPlusRefreshBtn.setAlpha(0.35f);
         } else {
             mStPlusRefreshBtn.clearAnimation();
-            mStPlusRefreshBtn.setAlpha(0.45f);
+            // clearAnimation() zostawia widok z przekrzywiona macierza, przez co ikona
+            // po skonczeniu skanowania "przeskakiwala w zle miejsce". Zerujemy obrot.
+            mStPlusRefreshBtn.setRotation(0f);
+            mStPlusRefreshBtn.setAlpha(0.25f);
         }
     }
 

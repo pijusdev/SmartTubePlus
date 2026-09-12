@@ -127,6 +127,20 @@ public class VideoCardPresenter extends LongClickPresenter {
 
         cardView.setTitleText(video.getTitle());
         cardView.setContentText(video.getSecondTitle());
+
+        // >>> STPLUS: karta stanu feedu ma WYGLADAC jak nasza, nie jak film bez okladki.
+        // Bez tego dostawala szara zaslepke Glide'a u gory i jasne pole tekstowe —
+        // User (2026-09-12): "za jasna i razi w oczy (...) po co ona ma czarny tekst na
+        // bialym tle i po chuj ten szary u gory".
+        // UWAGA: wymiary obrazka MUSZA byc podane tutaj. Ten hak wychodzi z metody
+        // przed `setMainImageDimensions` upstreama, wiec bez tego nasza KWADRATOWA
+        // ikona rozpychala kafelek na wysokosc i karta stanu byla wyzsza od pozostalych
+        // (pomiar na tablecie: obszar obrazka 392 px zamiast 221).
+        if (com.liskovsoft.smartyoutubetv2.common.stplus.StPlus.isStatusItem(video)) {
+            StPlusStatusCard.decorate(cardView, mWidth, mHeight);
+            return;
+        }
+        // <<< STPLUS
         // Count progress that very close to zero. E.g. when user closed video immediately.
         cardView.setProgress(video.percentWatched > 0 && video.percentWatched < 1 ? 1 : Math.round(video.percentWatched));
         cardView.setBadgeText(

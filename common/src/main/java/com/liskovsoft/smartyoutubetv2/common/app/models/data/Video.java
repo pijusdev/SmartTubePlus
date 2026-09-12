@@ -732,6 +732,15 @@ public final class Video {
         }
 
         percentWatched = video.percentWatched;
+
+        // >>> STPLUS: karta statusu zmienia TRESC, a nie postep odtwarzania — bez tego
+        // meldunek na ekranie zostawal przy "jeszcze nie skanowalem", mimo ze w tle
+        // zebralo sie juz kilkaset filmow. Szczegoly: STPLUS/MODYFIKACJE.md
+        if (com.liskovsoft.smartyoutubetv2.common.stplus.StPlus.isStatusItem(this)) {
+            title = video.title;
+            secondTitle = video.secondTitle;
+        }
+        // <<< STPLUS
     }
 
     public void sync(MediaItemMetadata metadata) {

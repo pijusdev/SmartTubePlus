@@ -82,6 +82,12 @@ public class MainApplication extends MultiDexApplication { // fix: Didn't find c
 
         setupGlobalExceptionHandler();
         setupViewManager();
+
+        // >>> STPLUS: magazyn feedu "Twoje kanaly" wczytujemy juz TERAZ, w tle.
+        // Bez tego plik (~1 MB) czytal sie dopiero przy pierwszym rysowaniu wiersza
+        // i wiersz potrafil nie pojawic sie po starcie. Szczegoly: STPLUS/MODYFIKACJE.md
+        com.liskovsoft.smartyoutubetv2.common.stplus.StPlus.preload(this);
+        // <<< STPLUS
     }
 
     private void setupViewManager() {

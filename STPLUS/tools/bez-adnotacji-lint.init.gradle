@@ -1,0 +1,12 @@
+// >>> STPLUS (tylko build lokalny, NIE modyfikuje repo)
+// Zadania extract*Annotations w podprojektach-bibliotekach ciagna z sieci
+// com.android.tools.lint:lint-gradle. Na tej maszynie ruch wychodzacy jest
+// blokowany, a do APK te adnotacje nie sa potrzebne. Wylaczamy je.
+// Uzycie: gradlew.bat -I STPLUS/tools/bez-adnotacji-lint.init.gradle <task>
+allprojects {
+    tasks.whenTaskAdded { t ->
+        if (t.name ==~ /extract.*Annotations/) {
+            t.enabled = false
+        }
+    }
+}

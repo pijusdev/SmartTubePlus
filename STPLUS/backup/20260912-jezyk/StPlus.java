@@ -172,10 +172,6 @@ public final class StPlus {
     private static int sLastRoundSilent;
     /** Ile kanalow lacznie odmowilo od startu procesu. */
     private static int sSilentTotal;
-    /** Ile NOWYCH filmow doszlo w biezacym obiegu (meldunek dla Usera). */
-    private static int sCycleNewItems;
-    /** Kiedy skonczyl sie ostatni pelny obieg (0 = jeszcze zaden). */
-    private static volatile long sCycleFinished;
     /** Stan do linii debugowej. */
     private static String sDebugState = "start";
 
@@ -228,7 +224,7 @@ public final class StPlus {
         // Reczne odswiezenie = nowy pomiar. Liczniki kodow RSS lecza sie od zera,
         // zeby "404x120" z poprzedniej godziny nie zaslanialo tego, co dzieje sie teraz.
         StPlusFeedSource.resetRoundStats();
-        sLastRoundInfo = StPlusText.scanning();
+        sLastRoundInfo = "skanuje...";
         if (sContext == null || sView == null || sSection == null) {
             return;
         }
@@ -264,7 +260,7 @@ public final class StPlus {
     private static Video createLoadingItem(Context context) {
         Video video = new Video();
         video.videoId = LOADING_ITEM_ID;
-        video.title = StPlusText.loadingMore();
+        video.title = context.getString(R.string.stplus_loading_more);
         return video;
     }
 
@@ -324,7 +320,7 @@ public final class StPlus {
         sShownCount = 0;
         sShownSignature = null;
         sRowShownThisCycle = false;
-        sLastRoundInfo = StPlusText.storeCleared();
+        sLastRoundInfo = "magazyn wyczyszczony — skanuje od nowa";
         sSilentTotal = 0;
     }
 
@@ -382,12 +378,7 @@ public final class StPlus {
      * stamtad przez summaryText() / SummaryListener.
      */
     private static String rowTitle(Context context) {
-        return StPlusText.rowTitle();
-    }
-
-    /** Naglowek naszego wiersza — do rozpoznania wiersza w warstwie UI. */
-    public static String rowTitleText() {
-        return StPlusText.rowTitle();
+        return context.getString(R.string.stplus_subscriptions_row);
     }
 
     // ------------------------------------------------- opis po prawej stronie ---
@@ -416,33 +407,12 @@ public final class StPlus {
      * null = nie ma czego pokazywac (tryb debugowania wylaczony albo magazyn jeszcze
      * nie wczytany).
      */
-    /*
-     * Opis ma odpowiadac na pytania, ktore User zadal wprost (2026-09-12):
-     * "nie ma nawet informacji ile pobrano filmow w ostatnim przejsciu",
-     * "kiedy to sie odswieza (...) czy sie odswiezy za 5 minut, nie wiem tego".
-     *
-     * Wiec: gdy obieg trwa — ile kanalow juz zrobione i ile nowych filmow doszlo;
-     * gdy stoi — ile filmow w magazynie, o ktorej byl ostatni obieg i ile przyniosl,
-     * oraz o ktorej rusza nastepny (albo ze tylko recznie).
-     */
     public static String summaryText() {
         if (!debugLine() || !sStoreReady) {
             return null;
         }
-
-        if (sCycleRunning) {
-            int all = StPlusStore.channelCount();
-            int left = StPlusStore.staleCountBefore(sCycleCutoff, sCycleCutoff);
-            return StPlusText.summaryScanning(Math.max(0, all - left), all, sCycleNewItems);
-        }
-
-        String lastClock = sCycleFinished > 0 ? clock(sCycleFinished) : null;
-        String nextClock = null;
-        long every = sContext != null ? StPlusSettings.getRefreshIntervalMs(sContext) : 0;
-        if (every > 0 && sCycleStarted > 0) {
-            nextClock = clock(sCycleStarted + every);
-        }
-        return StPlusText.summaryIdle(StPlusStore.itemCount(), lastClock, sCycleNewItems, nextClock);
+        return StPlusStore.withDataCount() + " z " + StPlusStore.channelCount()
+                + " kanałów, " + StPlusStore.itemCount() + " filmów";
     }
 
     /** Odswieza sam opis przy prawej krawedzi — bez ruszania wiersza. */
@@ -489,40 +459,40 @@ public final class StPlus {
          * wiec ta karta jest jednoczesnie meldunkiem i gwarantem istnienia wiersza.
          */
         if (!sStoreReady) {
-            video.title = StPlusText.rowTitle();
-            video.secondTitle = StPlusText.cardLoading();
+            video.title = context.getString(R.string.stplus_subscriptions_row);
+            video.secondTitle = "wczytuję zapisane materiały...";
             return video;
         }
 
         if (all == 0) {
             // K20 — swieza instalacja. Kliknieciem karty wchodzi sie w nasze menu.
-            video.title = StPlusText.rowTitle();
-            video.secondTitle = StPlusText.cardNoSubs();
+            video.title = context.getString(R.string.stplus_subscriptions_row);
+            video.secondTitle = "brak subskrypcji — zaimportuj listę kanałów (np. z NewPipe)";
             return video;
         }
 
-        video.title = StPlusText.counts(withData, all, items);
+        video.title = withData + " z " + all + " kanalow, " + items + " filmow";
 
         StringBuilder sb = new StringBuilder();
-        sb.append(sLastRoundInfo != null ? sLastRoundInfo : StPlusText.cardNotScanned());
+        if (sLastRoundInfo != null) {
+            sb.append(sLastRoundInfo);
+        } else {
+            sb.append("jeszcze nie skanowalem");
+        }
 
-        // Szczegoly techniczne (zrodlo, blad, kody odpowiedzi) tylko w trybie debugowania —
-        // bez niego karta ma byc spokojna i czytelna, a nie zrzutem z diagnostyki.
-        if (debugLine()) {
-            String src = RssOptions.lastSourceUsed;
-            if (src != null) {
-                sb.append(StPlusText.sourceLabel("RSS".equals(src)));
-            }
+        String src = RssOptions.lastSourceUsed;
+        if (src != null) {
+            sb.append(" • zrodlo: ").append("RSS".equals(src) ? "RSS" : "zakladki kanalu");
+        }
 
-            String err = RssOptions.lastError;
-            if (err != null) {
-                sb.append(" • ").append(err);
-            }
+        String err = RssOptions.lastError;
+        if (err != null) {
+            sb.append(" • ").append(err);
+        }
 
-            String codes = RssOptions.lastCodesSummary;
-            if (codes != null) {
-                sb.append(StPlusText.codesLabel()).append(codes);
-            }
+        String codes = RssOptions.lastCodesSummary;
+        if (codes != null) {
+            sb.append(" • odpowiedzi RSS: ").append(codes);
         }
 
         video.secondTitle = sb.toString();
@@ -551,37 +521,7 @@ public final class StPlus {
         if (exact > 0) {
             return exact;
         }
-
-        long fromDate = fromRelative(item.getProductionDate());
-        if (fromDate > 0) {
-            return fromDate;
-        }
-
-        /*
-         * OSTATNIA DESKA: czas publikacji z PODTYTULU kafelka.
-         *
-         * Pomiar na projektorze (2026-09-12, 16:47): przy zrodle "zakladki kanalu"
-         * magazyn mial 2572 pozycje i KAZDA z data 0, a w logu nie bylo ANI JEDNEGO
-         * wpisu "Unparsed relative date". To znaczy, ze `getProductionDate()` zwraca
-         * `null` — funkcja przeliczajaca konczy sie na pierwszym warunku i nawet nie
-         * dochodzi do rozpoznawania jednostek. Czyli grid kanalu tego pola nie wypelnia.
-         *
-         * Ten sam tekst jest jednak widoczny na karcie, w ostatnim czlonie podtytulu:
-         * "CompuFlair • 1,7 tys. wyswietlen • 2 tygodnie temu". Bierzemy go stamtad.
-         * To nie jest elegancki zrodlo prawdy, ale jedyne, jakie ta sciezka daje —
-         * a bez daty cala funkcja "najnowsze pierwsze" przestaje istniec.
-         */
-        return fromRelative(lastSegment(item.getSecondTitle()));
-    }
-
-    /** Ostatni czlon podtytulu kafelka (czlony rozdziela " • "). */
-    private static String lastSegment(CharSequence text) {
-        if (text == null) {
-            return null;
-        }
-        String value = text.toString();
-        int sep = value.lastIndexOf(" • ");
-        return sep >= 0 ? value.substring(sep + 3) : value;
+        return fromRelative(item.getProductionDate());
     }
 
     /** "2 days ago" / "3 tygodnie temu" -> znacznik czasu. 0 = nie rozpoznano. */
@@ -605,38 +545,22 @@ public final class StPlus {
             num = 1; // "rok temu", "a day ago"
         }
 
-        /*
-         * KOLEJNOSC TYCH WARUNKOW JEST ISTOTNA — dluzsze jednostki PRZED krotszymi.
-         *
-         * Pulapka, ktora tu byla: polskie "tygodnie" zawiera w sobie "dni"
-         * (ty-go-DNI-e), a "tydzien" zawiera "dzie". Przy sprawdzaniu dni przed
-         * tygodniami material sprzed dwoch TYGODNI dostawal date sprzed dwoch DNI
-         * i wskakiwal na gore wiersza. Dlatego dni sa na samym koncu.
-         */
         long unit;
         if (t.contains("sekund") || t.contains("second")) {
             unit = 1000L;
-        } else if (t.contains("minut") || t.contains("minute") || t.contains(" min")) {
+        } else if (t.contains("minut") || t.contains("minute")) {
             unit = 60L * 1000L;
-        } else if (t.contains("godzin") || t.contains("godz") || t.contains("hour")) {
+        } else if (t.contains("godz") || t.contains("hour")) {
             unit = 60L * 60L * 1000L;
-        } else if (t.contains("rok") || t.contains("lat") || t.contains("year")) {
-            unit = 365L * 24L * 60L * 60L * 1000L;
-        } else if (t.contains("miesi") || t.contains("mies") || t.contains("month")) {
-            unit = 30L * 24L * 60L * 60L * 1000L;
-        } else if (t.contains("tydz") || t.contains("tygod") || t.contains("tyg")
-                || t.contains("week")) {
-            unit = 7L * 24L * 60L * 60L * 1000L;
         } else if (t.contains("dzie") || t.contains("dni") || t.contains("day")) {
             unit = 24L * 60L * 60L * 1000L;
-        } else if (t.contains("wczoraj") || t.contains("yesterday")) {
-            return System.currentTimeMillis() - 24L * 60L * 60L * 1000L;
-        } else if (t.contains("dzisiaj") || t.contains("today")) {
-            return System.currentTimeMillis();
+        } else if (t.contains("tydz") || t.contains("tygod") || t.contains("week")) {
+            unit = 7L * 24L * 60L * 60L * 1000L;
+        } else if (t.contains("miesi") || t.contains("month")) {
+            unit = 30L * 24L * 60L * 60L * 1000L;
+        } else if (t.contains("rok") || t.contains("lat") || t.contains("year")) {
+            unit = 365L * 24L * 60L * 60L * 1000L;
         } else {
-            // Nie zgadujemy. Zapisujemy, co przyszlo — zeby nastepnym razem nie
-            // trzeba bylo tego wywnioskowac ze skutkow (magazyn z samymi zerami).
-            Log.w(TAG, "Unparsed relative date: " + text);
             return 0;
         }
 
@@ -658,22 +582,22 @@ public final class StPlus {
         }
         long diff = System.currentTimeMillis() - published;
         if (diff < 0) {
-            return StPlusText.timeJustNow();
+            return "zaraz";
         }
         long minutes = diff / 60000L;
         if (minutes < 60) {
-            return StPlusText.timeMinutes(Math.max(1, minutes));
+            return Math.max(1, minutes) + " min temu";
         }
         long hours = minutes / 60;
         if (hours < 48) {
-            return StPlusText.timeHours(hours);
+            return hours + " godz. temu";
         }
         long days = hours / 24;
         if (days < 31) {
-            return StPlusText.timeDays(days);
+            return days + " dni temu";
         }
         long months = days / 30;
-        return StPlusText.timeMonths(months);
+        return months + " mies. temu";
     }
 
     /** Dokleja czas publikacji do drugiej linii kafelka (tryb debugowy / czytelnosc). */
@@ -729,43 +653,12 @@ public final class StPlus {
         if (video.isShorts) {
             return true;
         }
-        /*
-         * CZAS TRWANIA — najpewniejszy sygnal, jaki w ogole mamy.
-         *
-         * Dostajemy go WYLACZNIE ze sciezki "zakladki kanalu"; kanal RSS YouTube'a
-         * nie podaje dlugosci w ogole (sprawdzone w magazynie na tablecie: pole
-         * dlugosci puste przy kazdej pozycji z RSS). Dlatego filtr shortow dziala
-         * naprawde tylko przy tamtym zrodle — i dokladnie tak jest napisane w menu.
-         *
-         * Prog 60 s to ten sam, ktorego uzywa upstream (YouTubeHelper.isShorts).
-         */
-        if (video.getDurationMs() > 0 && video.getDurationMs() <= 60_000) {
-            return true;
-        }
         String title = video.title;
         if (title == null) {
             return false;
         }
         String t = title.toLowerCase();
         return t.contains("#short") || t.contains("#yt short");
-    }
-
-    /**
-     * Zmiana ustawien, ktore zmieniaja WYGLAD wiersza (karta stanu, tryb debugowania,
-     * jezyk). Wiersz i opis przy prawej krawedzi trzeba przerysowac od razu, inaczej
-     * User przelacza cos w menu i nie widzi zadnej reakcji.
-     */
-    public static void onCardSettingsChanged() {
-        sShownSignature = null;
-        pushSummary();
-        sMain.post(new Runnable() {
-            @Override
-            public void run() {
-                if (sView != null && sSection != null && sContext != null) {
-                    showRow(sContext, sView, sSection, rowVideos(), true);
-                }
-            }
-        });
     }
 
     /** Zmiana filtra w ustawieniach — wiersz trzeba przebudowac od razu. */
@@ -791,16 +684,7 @@ public final class StPlus {
          * pozycji — wiec nie bylo i wiersza. User: "ten wiersz zawsze musi sie wyswietlic".
          * Zamiast pustki idzie sama karta stanu, ktora mowi, co sie dzieje.
          */
-        /*
-         * Karta stanu ma WLASNY przelacznik, osobny od trybu debugowania.
-         * User (2026-09-12): "nie wiedzialem, ze ta ikona smart tube zniknie jak
-         * wylaczamy debugowanie. To zrob do tego osobny przelacznik, bo ta ikona
-         * pierwsza ze smart tube jest spoko."
-         *
-         * Przy PUSTEJ liscie karta jest zawsze — bez niej leanback nie zrobi wiersza,
-         * a wiersz "Twoje kanaly" ma byc widoczny zawsze.
-         */
-        boolean withStatus = StPlusSettings.isStatusCard(sContext) || videos.isEmpty();
+        boolean withStatus = debugLine() || videos.isEmpty();
 
         String signature = signature(videos) + (withStatus ? "#s" : "");
         if (!force && signature.equals(sShownSignature)) {
@@ -844,53 +728,22 @@ public final class StPlus {
             return true;
         }
 
-        final int end = Math.min(sShownCount + PAGE_CHUNK, sAllVideos.size());
-        final List<Video> chunk = new ArrayList<>(sAllVideos.subList(sShownCount, end));
+        int end = Math.min(sShownCount + PAGE_CHUNK, sAllVideos.size());
+        List<Video> chunk = new ArrayList<>(sAllVideos.subList(sShownCount, end));
         sShownCount = end;
 
-        /*
-         * DOSYPUJEMY W NASTEPNEJ KLATCE, NIE TERAZ.
-         *
-         * Ten hak wolany jest z `onItemSelected` — czyli ze SRODKA przewijania
-         * (GridLayoutManager.scrollHorizontallyBy -> dispatchChildSelected). Kazda
-         * zmiana adaptera w tym momencie konczy sie wyjatkiem:
-         *   IllegalStateException: Cannot call this method while RecyclerView is
-         *   computing a layout or scrolling
-         * i aplikacja pada. User, 2026-09-12: "jade w prawo po kanalach, jak jade
-         * szybko, to dojezdzam do konca i nagle sie crashuje" — pelny slad w
-         * STPLUS/AUDYT-CC.md (K27).
-         *
-         * `sMain.post` przenosi obie operacje za biezaca klatke, gdy RecyclerView
-         * juz nie liczy ukladu. Upstream ma na to wlasny straznik
-         * (MultipleRowsFragment.isComputingLayout), ale obejmuje on tylko akcje
-         * SYNC i REPLACE — REMOVE i APPEND, czyli nasze, ida bez oslony.
-         */
-        sMain.post(new Runnable() {
-            @Override
-            public void run() {
-                if (sContext == null || sView == null || sSection == null) {
-                    return;
-                }
-                try {
-                    // 1. zdejmij stary kafelek "Ładowanie…"
-                    List<Video> loading = new ArrayList<>();
-                    loading.add(createLoadingItem(sContext));
-                    sView.updateSection(buildGroup(sContext, sSection, loading, VideoGroup.ACTION_REMOVE));
+        // 1. zdejmij stary kafelek "Ładowanie…"
+        List<Video> loading = new ArrayList<>();
+        loading.add(createLoadingItem(sContext));
+        sView.updateSection(buildGroup(sContext, sSection, loading, VideoGroup.ACTION_REMOVE));
 
-                    // 2. dosyp partie (i kafelek na koncu, jesli zostalo jeszcze wiecej)
-                    List<Video> page = new ArrayList<>(chunk);
-                    if (hasMore()) {
-                        page.add(createLoadingItem(sContext));
-                    }
-                    sView.updateSection(buildGroup(sContext, sSection, page, VideoGroup.ACTION_APPEND));
+        // 2. dosyp partie (i kafelek na koncu, jesli zostalo jeszcze wiecej)
+        if (hasMore()) {
+            chunk.add(createLoadingItem(sContext));
+        }
+        sView.updateSection(buildGroup(sContext, sSection, chunk, VideoGroup.ACTION_APPEND));
 
-                    Log.d(TAG, "Row page appended: " + page.size()
-                            + " (shown " + sShownCount + "/" + sAllVideos.size() + ")");
-                } catch (Exception e) {
-                    Log.e(TAG, "Row append failed: " + e.getMessage());
-                }
-            }
-        });
+        Log.d(TAG, "Row page appended: " + chunk.size() + " (shown " + sShownCount + "/" + sAllVideos.size() + ")");
         return true;
     }
 
@@ -1137,7 +990,6 @@ public final class StPlus {
         sCycleCutoff = now;
         sCycleStarted = now;
         sCycleRunning = true;
-        sCycleNewItems = 0;
         Log.d(TAG, "Cycle start (onDemand=" + onDemand + ")");
         startRound(sContext, sView, sSection, 0L);
     }
@@ -1237,8 +1089,8 @@ public final class StPlus {
                 error -> {
                     Log.e(TAG, "RSS error: " + error.getMessage());
                     final long now = System.currentTimeMillis();
-                    sLastRoundInfo = StPlusText.roundError(
-                            error.getMessage() != null ? error.getMessage() : "?");
+                    sLastRoundInfo = "ostatnie skanowanie " + clock(now) + ": blad — "
+                            + (error.getMessage() != null ? error.getMessage() : "nieznany");
                     sIo.execute(new Runnable() {
                         @Override
                         public void run() {
@@ -1281,9 +1133,15 @@ public final class StPlus {
             // Meldunek na karte statusu — pelnym zdaniem, zeby User widzial, CO wyszlo
             // z ostatniego skanowania (jego uwaga: "nie ma zadnego debugu, co wyszlo,
             // czy byl blad, chuj wie co bylo").
-            sCycleNewItems += StPlusStore.lastNewItems();
-            sLastRoundInfo = StPlusText.roundInfo(clock(now), batch.size(), grouped.size(),
-                    parsed.size(), sLastRoundSilent);
+            StringBuilder info = new StringBuilder();
+            info.append("ostatnie skanowanie ").append(clock(now)).append(": ");
+            info.append(batch.size()).append(" kanalow, ");
+            info.append(grouped.size()).append(" z materialami, ");
+            info.append(parsed.size()).append(" filmow");
+            if (sLastRoundSilent > 0) {
+                info.append(", ").append(sLastRoundSilent).append(" bez odpowiedzi");
+            }
+            sLastRoundInfo = info.toString();
             Log.d(TAG, "Round done: got " + parsed.size() + " items from " + grouped.size()
                     + " channels, updated " + updated + ", silent " + sLastRoundSilent
                     + " (" + StPlusStore.stats() + ")");
@@ -1294,7 +1152,6 @@ public final class StPlus {
                 public void run() {
                     setRefreshing(false);
                     syncStatusCard(); // sam meldunek, w miejscu — bez przerysowania wiersza
-                    pushSummary();    // i opis przy prawej krawedzi naglowka
                     // Cicha rotacja NIE przerysowuje wiersza (skakanie ekranu).
                     if (!sQuietRotation && sView != null && sSection != null) {
                         showRow(sContext, sView, sSection, videos, false);
@@ -1338,7 +1195,6 @@ public final class StPlus {
                 if (left <= 0) {
                     sDebugState = "obieg zakończony";
                     sCycleRunning = false;
-                    sCycleFinished = System.currentTimeMillis();
                     saveStore(sContext, true); // koniec obiegu = jedyny pewny moment zapisu
                     Log.d(TAG, "Cycle complete (" + StPlusStore.stats() + ")");
                     // Koniec obiegu = jedyny moment, w ktorym cicha rotacja rusza wiersz.
