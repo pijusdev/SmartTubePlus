@@ -4,9 +4,11 @@ A small fork of [SmartTube](https://github.com/yuliskov/SmartTube) (base v32.40)
 
 ## Screenshots
 
-| Home screen — "Your channels" row | Side menu | SmartTube+ settings (gear menu) |
-|---|---|---|
-| ![Home screen](STPLUS/docs/screenshot-home.png) | ![Side menu](STPLUS/docs/screenshot-menu.png) | ![Settings](STPLUS/docs/screenshot-settings.png) |
+![Home screen — "Your channels" row](STPLUS/docs/screenshot-home.png)
+
+![Side menu](STPLUS/docs/screenshot-menu.png)
+
+![SmartTube+ settings (gear menu)](STPLUS/docs/screenshot-settings.png)
 
 ---
 
