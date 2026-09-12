@@ -2,7 +2,11 @@
 
 A small fork of [SmartTube](https://github.com/yuliskov/SmartTube) (base v32.40) that adds a **"Your channels" row** on the home screen — a private subscription feed that works **without signing in to YouTube**.
 
-![SmartTube+ — home screen with "Your channels" row](STPLUS/docs/screenshot-hero.png)
+## Screenshots
+
+| Home screen — "Your channels" row | Side menu | SmartTube+ settings (gear menu) |
+|---|---|---|
+| ![Home screen](STPLUS/docs/screenshot-home.png) | ![Side menu](STPLUS/docs/screenshot-menu.png) | ![Settings](STPLUS/docs/screenshot-settings.png) |
 
 ---
 
